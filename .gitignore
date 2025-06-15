@@ -1,1 +1,8 @@
 build/*
+build-*/
+dist/
+*.o
+*.wasm
+*.js.map
+test_bindings*
+node_modules/
