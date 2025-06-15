@@ -37,7 +37,7 @@ if(EMSCRIPTEN)
     # Emscripten-specific settings
     set_target_properties(${PROJECT_NAME} PROPERTIES
         SUFFIX ".js"
-        LINK_FLAGS "-s MODULARIZE=1 -s EXPORT_NAME='CDT' -s ENVIRONMENT='web,node' -s EXPORT_ES6=1 -s USE_ES6_IMPORT_META=0 --bind -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=16MB -s MAXIMUM_MEMORY=128MB"
+        LINK_FLAGS "-s MODULARIZE=1 -s EXPORT_NAME='CDT' -s ENVIRONMENT='web,node' -s EXPORT_ES6=1 --bind -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=16MB -s MAXIMUM_MEMORY=128MB"
     )
     
     # Disable architecture-specific optimizations for WebAssembly
