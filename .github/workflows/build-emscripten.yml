@@ -37,42 +37,58 @@ jobs:
     - name: Test generated JavaScript
       run: |
         cd build-emscripten
-        node -e "
+        cat > test_module.js << 'EOF'
         const fs = require('fs');
-        if (fs.existsSync('cdt.js')) {
-          console.log('✓ cdt.js generated successfully');
-          const content = fs.readFileSync('cdt.js', 'utf8');
-          
-          // Check for function name in the source (basic check)
-          if (content.includes('computeCDT')) {
-            console.log('✓ computeCDT function found in generated JS source');
-          } else {
-            console.log('! computeCDT string not found in source (may be minified)');
-          }
-          
-          // Try to actually load and use the module
-          try {
-            const CDT = require('./cdt.js');
-            console.log('✓ Module loaded successfully');
-            console.log('Module exports:', Object.keys(CDT));
+        
+        async function testModule() {
+          if (fs.existsSync('cdt.js')) {
+            console.log('✓ cdt.js generated successfully');
+            const content = fs.readFileSync('cdt.js', 'utf8');
             
-            // Check if the function is available on the module
-            if (typeof CDT.computeCDT === 'function') {
-              console.log('✓ computeCDT function is available');
+            // Check for function name in the source (basic check)
+            if (content.includes('computeCDT')) {
+              console.log('✓ computeCDT function found in generated JS source');
             } else {
-              console.log('✗ computeCDT function not found on module');
-              console.log('Available functions:', Object.keys(CDT).filter(k => typeof CDT[k] === 'function'));
-              process.exit(1);
+              console.log('! computeCDT string not found in source (may be minified)');
             }
-          } catch (error) {
-            console.log('✗ Failed to load module:', error.message);
-            process.exit(1);
+            
+            // Try to actually load and use the module
+            try {
+              const CDTFactory = require('./cdt.js');
+              console.log('✓ Module factory loaded successfully');
+              
+              // Initialize the WebAssembly module
+              const CDT = await CDTFactory();
+              console.log('✓ WebAssembly module initialized successfully');
+              console.log('Module exports:', Object.keys(CDT));
+              
+              // Check if the function is available on the module
+              if (typeof CDT.computeCDT === 'function') {
+                console.log('✓ computeCDT function is available');
+                return true;
+              } else {
+                console.log('✗ computeCDT function not found on module');
+                console.log('Available functions:', Object.keys(CDT).filter(k => typeof CDT[k] === 'function'));
+                return false;
+              }
+            } catch (error) {
+              console.log('✗ Failed to load/initialize module:', error.message);
+              return false;
+            }
+          } else {
+            console.log('✗ cdt.js not found');
+            return false;
           }
-        } else {
-          console.log('✗ cdt.js not found');
-          process.exit(1);
         }
-        "
+        
+        testModule().then(success => {
+          process.exit(success ? 0 : 1);
+        }).catch(error => {
+          console.log('✗ Test failed:', error.message);
+          process.exit(1);
+        });
+        EOF
+        node test_module.js
         
     - name: Create distribution package
       run: |
