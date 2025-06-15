@@ -1,0 +1,241 @@
+name: Build Emscripten Bindings
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-emscripten:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Emscripten
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 'latest'
+        actions-cache-folder: 'emsdk-cache'
+        
+    - name: Verify Emscripten
+      run: emcc -v
+      
+    - name: Build Emscripten Module
+      run: |
+        mkdir -p build-emscripten
+        cd build-emscripten
+        emcmake cmake .. -DEMSCRIPTEN=ON -DLGPL=OFF
+        emmake make -j4 VERBOSE=1
+        
+    - name: Debug generated files
+      run: |
+        cd build-emscripten
+        echo "=== Generated files ==="
+        ls -la
+        echo "=== File sizes ==="
+        du -h cdt.* || du -h cdt.js
+        echo "=== JS file head (first 100 lines) ==="
+        head -100 cdt.js
+        echo "=== JS file tail (last 100 lines) ==="
+        tail -100 cdt.js
+        echo "=== Search for binding-related terms ==="
+        grep -n "EMSCRIPTEN_BINDINGS\|computeCDT\|testFunction\|function" cdt.js | head -20
+        
+    - name: Test generated JavaScript
+      run: |
+        cd build-emscripten
+        cat > test_module.js << 'EOF'
+        const fs = require('fs');
+        
+        async function testModule() {
+          if (fs.existsSync('cdt.js')) {
+            console.log('✓ cdt.js generated successfully');
+            const content = fs.readFileSync('cdt.js', 'utf8');
+            
+            // Check for function name in the source (basic check)
+            if (content.includes('computeCDT')) {
+              console.log('✓ computeCDT function found in generated JS source');
+            } else {
+              console.log('! computeCDT string not found in source (may be minified)');
+            }
+            
+            // Try to actually load and use the module
+            try {
+              const CDTFactory = require('./cdt.js');
+              console.log('✓ Module factory loaded successfully');
+              
+              // Initialize the WebAssembly module
+              const CDT = await CDTFactory();
+              console.log('✓ WebAssembly module initialized successfully');
+              console.log('Module exports:', Object.keys(CDT));
+              
+              // Test simple function first
+              if (typeof CDT.testFunction === 'function') {
+                console.log('✓ testFunction is available');
+                const testResult = CDT.testFunction(3, 4);
+                console.log('testFunction(3, 4) =', testResult);
+              } else {
+                console.log('✗ testFunction not found');
+              }
+              
+              // Check if the function is available on the module
+              if (typeof CDT.computeCDT === 'function') {
+                console.log('✓ computeCDT function is available');
+                return true;
+              } else {
+                console.log('✗ computeCDT function not found on module');
+                console.log('Available functions:', Object.keys(CDT).filter(k => typeof CDT[k] === 'function'));
+                return false;
+              }
+            } catch (error) {
+              console.log('✗ Failed to load/initialize module:', error.message);
+              return false;
+            }
+          } else {
+            console.log('✗ cdt.js not found');
+            return false;
+          }
+        }
+        
+        testModule().then(success => {
+          process.exit(success ? 0 : 1);
+        }).catch(error => {
+          console.log('✗ Test failed:', error.message);
+          process.exit(1);
+        });
+        EOF
+        node test_module.js
+        
+    - name: Create distribution package
+      run: |
+        mkdir -p dist
+        cp build-emscripten/cdt.js dist/
+        # Copy wasm file only if it exists (not in single-file mode)
+        if [ -f build-emscripten/cdt.wasm ]; then
+          cp build-emscripten/cdt.wasm dist/
+        fi
+        cp cdt.d.ts dist/
+        cp README_WASM.md dist/README.md
+        cp demo.html dist/
+        
+        # Create package.json for the distribution
+        if [ -f build-emscripten/cdt.wasm ]; then
+          # Separate WASM file mode
+          FILES_ARRAY='["cdt.js", "cdt.wasm", "cdt.d.ts", "README.md"]'
+        else
+          # Single file mode (WASM embedded in JS)
+          FILES_ARRAY='["cdt.js", "cdt.d.ts", "README.md"]'
+        fi
+        
+        cat > dist/package.json << EOF
+        {
+          "name": "cdt-wasm",
+          "version": "1.0.${{ github.run_number }}",
+          "description": "WebAssembly bindings for Constrained Delaunay Tetrahedrization",
+          "main": "cdt.js",
+          "types": "cdt.d.ts",
+          "files": $FILES_ARRAY,
+          "keywords": ["webassembly", "mesh", "delaunay", "tetrahedrization", "geometry", "cdt"],
+          "author": "CDT Contributors",
+          "license": "GPL-3.0",
+          "repository": {
+            "type": "git",
+            "url": "https://github.com/zalo/CDT.git"
+          },
+          "homepage": "https://github.com/zalo/CDT",
+          "engines": {
+            "node": ">=14.0.0"
+          }
+        }
+        EOF
+        
+        # Create README for the package
+        cat > dist/README.md << 'EOF'
+        # CDT WebAssembly Bindings
+        
+        WebAssembly bindings for the CDT (Constrained Delaunay Tetrahedrization) library.
+        
+        ## Usage
+        
+        ```javascript
+        import CDT from 'cdt-wasm';
+        
+        // Example: tetrahedralize a cube
+        const vertices = [
+          0, 0, 0,  // vertex 0
+          1, 0, 0,  // vertex 1  
+          1, 1, 0,  // vertex 2
+          0, 1, 0,  // vertex 3
+          0, 0, 1,  // vertex 4
+          1, 0, 1,  // vertex 5
+          1, 1, 1,  // vertex 6
+          0, 1, 1   // vertex 7
+        ];
+        
+        const triangles = [
+          0, 1, 2, 2, 3, 0,  // bottom face
+          4, 7, 6, 6, 5, 4,  // top face
+          0, 4, 5, 5, 1, 0,  // front face
+          2, 6, 7, 7, 3, 2,  // back face
+          0, 3, 7, 7, 4, 0,  // left face
+          1, 5, 6, 6, 2, 1   // right face
+        ];
+        
+        const result = CDT.computeCDT(vertices, triangles);
+        
+        if (result.success) {
+          console.log('Tetrahedrization succeeded!');
+          console.log(`Generated ${result.numTetrahedra} tetrahedra`);
+          console.log(`Added ${result.numSteinerVertices} Steiner points`);
+        }
+        ```
+        
+        ## API
+        
+        See the TypeScript definitions in `cdt.d.ts` for complete API documentation.
+        EOF
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: always()  # Upload artifacts even if tests fail
+      with:
+        name: cdt-wasm-${{ github.sha }}
+        path: dist/
+        retention-days: 30
+        
+    - name: Upload debug artifacts
+      uses: actions/upload-artifact@v4
+      if: always()  # Upload debug artifacts even if tests fail
+      with:
+        name: cdt-debug-${{ github.sha }}
+        path: build-emscripten/
+        retention-days: 7
+        
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./dist
+        destination_dir: wasm
+        
+  build-native:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Native Version
+      run: |
+        mkdir -p build-native
+        cd build-native
+        cmake .. -DLGPL=OFF
+        make -j4
+        
+    - name: Test Native Binary
+      run: |
+        cd build-native
+        ./cdt --help || true  # Show help message
+        echo "✓ Native binary built successfully"

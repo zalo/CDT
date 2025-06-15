@@ -13,6 +13,9 @@ set(ENABLE_AVX2 True)
 # Use CMake -DLGPL=ON if you opt for the LGPL license
 option(LGPL "LGPL" OFF)
 
+# Use CMake -DEMSCRIPTEN=ON to build for Emscripten/WebAssembly
+option(EMSCRIPTEN "Build for Emscripten/WebAssembly" OFF)
+
 # set the project name
 project(cdt)
 
@@ -20,13 +23,31 @@ project(cdt)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# add the executable
-add_executable(${PROJECT_NAME} 
+# Source files for the library
+set(CDT_SOURCES
     src/giftWrap.cpp
     src/PLC.cpp
     src/delaunay.cpp
-    src/main.cpp
 )
+
+if(EMSCRIPTEN)
+    # Build as Emscripten module
+    add_executable(${PROJECT_NAME} ${CDT_SOURCES} src/bindings.cpp)
+    
+    # Emscripten-specific settings
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        SUFFIX ".js"
+        LINK_FLAGS "-s MODULARIZE=1 -s EXPORT_NAME='CDT' -s ENVIRONMENT='web,node' --bind -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=16MB -s MAXIMUM_MEMORY=128MB -s SINGLE_FILE=1"
+    )
+    
+    # Disable architecture-specific optimizations for WebAssembly
+    set(ENABLE_SSE2 False)
+    set(ENABLE_AVX2 False)
+    
+else()
+    # Build normal executable
+    add_executable(${PROJECT_NAME} ${CDT_SOURCES} src/main.cpp)
+endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 # optimize for speed
@@ -54,14 +75,16 @@ else()
 # grant IEEE 754 compliance
 	target_compile_options(${PROJECT_NAME} PUBLIC -frounding-math)
 	# set target architecture
-	if(ENABLE_AVX2)
+	if(ENABLE_AVX2 AND NOT EMSCRIPTEN)
 		target_compile_options(${PROJECT_NAME} PUBLIC "-mavx2")
                 target_compile_options(${PROJECT_NAME} PUBLIC "-mfma")
-	elseif(ENABLE_SSE2)
+	elseif(ENABLE_SSE2 AND NOT EMSCRIPTEN)
 		target_compile_options(${PROJECT_NAME} PUBLIC "-msse2")
 	endif()
 # reserve enough stack size	
-	target_compile_options(${PROJECT_NAME} PUBLIC -Wl,-z,stacksize=8421376)
+	if(NOT EMSCRIPTEN)
+		target_compile_options(${PROJECT_NAME} PUBLIC -Wl,-z,stacksize=8421376)
+	endif()
 	if(NOT LGPL)
 		target_compile_options(${PROJECT_NAME} PUBLIC "-DUSE_MAROTS_METHOD")
 	endif()
@@ -72,4 +95,3 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 	src
 	include
 )
-

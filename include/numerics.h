@@ -89,10 +89,20 @@ inline void setFPUModeToRoundNEAR() { _controlfp(_RC_NEAR, _MCW_RC); }
 #pragma GCC target("fma")
 #endif
 
+#ifndef __EMSCRIPTEN__
 #pragma STDC FENV_ACCESS ON
+#endif
 
-inline void setFPUModeToRoundUP() { fesetround(FE_UPWARD); }
-inline void setFPUModeToRoundNEAR() { fesetround(FE_TONEAREST); }
+inline void setFPUModeToRoundUP() { 
+#ifndef __EMSCRIPTEN__
+    fesetround(FE_UPWARD); 
+#endif
+}
+inline void setFPUModeToRoundNEAR() { 
+#ifndef __EMSCRIPTEN__
+    fesetround(FE_TONEAREST); 
+#endif
+}
 #endif
 
 #ifdef USE_SIMD_INSTRUCTIONS
