@@ -122,6 +122,11 @@ MeshInfo validateMesh(const std::vector<double>& vertices,
     return info;
 }
 
+// Simple test function to verify bindings work
+int testFunction(int a, int b) {
+    return a + b;
+}
+
 // Wrapper functions to handle default parameters properly
 CDTResult computeCDT_wrapper(const std::vector<double>& inputVertices, 
                             const std::vector<uint32_t>& inputTriangles) {
@@ -135,6 +140,9 @@ CDTResult computeCDT_withOptions(const std::vector<double>& inputVertices,
 }
 
 EMSCRIPTEN_BINDINGS(cdt_module) {
+    // Test function to verify bindings work
+    function("testFunction", &testFunction);
+    
     // Register vector types first
     register_vector<double>("VectorDouble");
     register_vector<uint32_t>("VectorUint32");

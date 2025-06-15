@@ -62,6 +62,15 @@ jobs:
               console.log('✓ WebAssembly module initialized successfully');
               console.log('Module exports:', Object.keys(CDT));
               
+              // Test simple function first
+              if (typeof CDT.testFunction === 'function') {
+                console.log('✓ testFunction is available');
+                const testResult = CDT.testFunction(3, 4);
+                console.log('testFunction(3, 4) =', testResult);
+              } else {
+                console.log('✗ testFunction not found');
+              }
+              
               // Check if the function is available on the module
               if (typeof CDT.computeCDT === 'function') {
                 console.log('✓ computeCDT function is available');
