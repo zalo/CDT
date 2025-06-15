@@ -125,10 +125,33 @@
         async function loadCDTModule() {
             try {
                 // Load the CDT module factory
-                const CDTFactory = (await import('./cdt.js')).default;
+                console.log('Attempting to load CDT module from ./cdt.js');
+                const module = await import('./cdt.js');
+                console.log('Module loaded, available exports:', Object.keys(module));
+                
+                const CDTFactory = module.default;
+                if (typeof CDTFactory !== 'function') {
+                    throw new Error(`CDTFactory is not a function. Got ${typeof CDTFactory}. Available exports: ${Object.keys(module).join(', ')}`);
+                }
+                
+                console.log('CDTFactory loaded, initializing WebAssembly module...');
                 
                 // Initialize the WebAssembly module
                 CDT = await CDTFactory();
+                
+                // Test simple function first
+                if (typeof CDT.testFunction === 'function') {
+                    console.log('✓ testFunction is available');
+                    const testResult = CDT.testFunction(3, 4);
+                    console.log('testFunction(3, 4) =', testResult);
+                } else {
+                    console.log('✗ testFunction not found');
+                }
+                
+                // Get debug info if available
+                if (typeof CDT.debugInfo === 'function') {
+                    console.log('Debug info:', CDT.debugInfo());
+                }
                 
                 document.getElementById('computeBtn').disabled = false;
                 showResult('CDT module loaded successfully!', 'result');
@@ -195,26 +218,41 @@
                 
                 const result = CDT.computeCDTWithOptions(vertices, triangles, addBoundingBox, verbose);
                 
-                if (result.success) {
+                console.log('CDT computation result:', result);
+                console.log('Result type:', typeof result);
+                console.log('Result keys:', result ? Object.keys(result) : 'null');
+                console.log('Vertices type:', typeof result?.vertices, 'length:', result?.vertices?.length);
+                console.log('Tetrahedra type:', typeof result?.tetrahedra, 'length:', result?.tetrahedra?.length);
+                
+                if (result && result.success) {
                     let output = `<h3>✓ CDT Computation Successful</h3>`;
-                    output += `<p><strong>Input:</strong> ${result.numInputVertices} vertices, ${triangles.length/3} triangles</p>`;
-                    output += `<p><strong>Output:</strong> ${result.vertices.length/3} vertices, ${result.numTetrahedra} tetrahedra</p>`;
-                    output += `<p><strong>Steiner points added:</strong> ${result.numSteinerVertices}</p>`;
-                    output += `<p><strong>Is polyhedron:</strong> ${result.isPolyhedron}</p>`;
+                    const numVertices = result.vertices && result.vertices.length ? result.vertices.length/3 : 0;
+                    const numInputTriangles = triangles.length/3;
                     
-                    output += `<h4>Tetrahedra:</h4><pre>`;
-                    for (let i = 0; i < result.numTetrahedra; i++) {
-                        const v0 = result.tetrahedra[i * 4];
-                        const v1 = result.tetrahedra[i * 4 + 1];
-                        const v2 = result.tetrahedra[i * 4 + 2];
-                        const v3 = result.tetrahedra[i * 4 + 3];
-                        output += `Tet ${i}: [${v0}, ${v1}, ${v2}, ${v3}]\\n`;
+                    output += `<p><strong>Input:</strong> ${result.numInputVertices || 0} vertices, ${numInputTriangles} triangles</p>`;
+                    output += `<p><strong>Output:</strong> ${numVertices} vertices, ${result.numTetrahedra || 0} tetrahedra</p>`;
+                    output += `<p><strong>Steiner points added:</strong> ${result.numSteinerVertices || 0}</p>`;
+                    output += `<p><strong>Is polyhedron:</strong> ${result.isPolyhedron || false}</p>`;
+                    
+                    if (result.tetrahedra && result.tetrahedra.length > 0) {
+                        output += `<h4>Tetrahedra:</h4><pre>`;
+                        const numTets = Math.min(result.numTetrahedra || 0, result.tetrahedra.length / 4);
+                        for (let i = 0; i < numTets; i++) {
+                            const v0 = result.tetrahedra[i * 4];
+                            const v1 = result.tetrahedra[i * 4 + 1];
+                            const v2 = result.tetrahedra[i * 4 + 2];
+                            const v3 = result.tetrahedra[i * 4 + 3];
+                            output += `Tet ${i}: [${v0}, ${v1}, ${v2}, ${v3}]\\n`;
+                        }
+                        output += `</pre>`;
+                    } else {
+                        output += `<p><strong>No tetrahedra generated</strong></p>`;
                     }
-                    output += `</pre>`;
                     
                     showResult(output, 'result');
                 } else {
-                    showResult('CDT computation failed', 'error');
+                    const errorMsg = result ? 'CDT computation failed' : 'CDT computation returned null/undefined result';
+                    showResult(errorMsg, 'error');
                 }
             } catch (e) {
                 showResult(`Error: ${e.message}`, 'error');

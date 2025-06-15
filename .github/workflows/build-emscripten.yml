@@ -2,7 +2,7 @@ name: Build Emscripten Bindings
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ '*' ]
   pull_request:
     branches: [ main ]
 
@@ -46,8 +46,10 @@ jobs:
     - name: Test generated JavaScript
       run: |
         cd build-emscripten
-        cat > test_module.js << 'EOF'
-        const fs = require('fs');
+        # Create package.json to enable ES modules
+        echo '{"type": "module"}' > package.json
+        cat > test_module.mjs << 'EOF'
+        import fs from 'fs';
         
         async function testModule() {
           if (fs.existsSync('cdt.js')) {
@@ -63,8 +65,17 @@ jobs:
             
             // Try to actually load and use the module
             try {
-              const CDTFactory = require('./cdt.js');
-              console.log('✓ Module factory loaded successfully');
+              // Try ES6 import 
+              const module = await import('./cdt.js');
+              const CDTFactory = module.default;
+              
+              if (typeof CDTFactory !== 'function') {
+                console.log('✗ CDTFactory is not a function, got:', typeof CDTFactory);
+                console.log('Module keys:', Object.keys(module));
+                return false;
+              }
+              
+              console.log('✓ Module loaded as ES6 module with default export');
               
               // Initialize the WebAssembly module
               const CDT = await CDTFactory();
@@ -106,7 +117,7 @@ jobs:
           process.exit(1);
         });
         EOF
-        node test_module.js
+        node test_module.mjs
         
     - name: Create distribution package
       run: |
@@ -214,11 +225,12 @@ jobs:
         retention-days: 7
         
     - name: Deploy to GitHub Pages
-      if: github.ref == 'refs/heads/main'
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./dist
+        destination_dir: ${{ github.ref_name }}
+        keep_files: true
         
   build-native:
     runs-on: ubuntu-latest
