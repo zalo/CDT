@@ -144,6 +144,6 @@ EMSCRIPTEN_BINDINGS(cdt_module) {
         .field("valid", &MeshInfo::valid);
     
     // Register main functions
-    emscripten::function("computeCDT", &computeCDT, allow_raw_pointers());
-    emscripten::function("validateMesh", &validateMesh, allow_raw_pointers());
+    emscripten::function("computeCDT", &computeCDT);
+    emscripten::function("validateMesh", &validateMesh);
 }
