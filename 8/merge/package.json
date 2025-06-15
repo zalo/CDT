@@ -1,6 +1,6 @@
 {
   "name": "cdt-wasm",
-  "version": "1.0.40",
+  "version": "1.0.39",
   "description": "WebAssembly bindings for Constrained Delaunay Tetrahedrization",
   "main": "cdt.js",
   "types": "cdt.d.ts",
