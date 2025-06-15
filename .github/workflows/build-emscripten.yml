@@ -2,7 +2,7 @@ name: Build Emscripten Bindings
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ '*' ]
   pull_request:
     branches: [ main ]
 
