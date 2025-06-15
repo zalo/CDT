@@ -2,6 +2,7 @@
 #include <emscripten/val.h>
 #include <vector>
 #include <string>
+#include <cmath>
 #include "delaunay.h"
 #include "inputPLC.h"
 #include "PLC.h"
@@ -68,8 +69,19 @@ CDTResult computeCDT(const std::vector<double>& inputVertices,
         // Extract vertices (including Steiner points)
         result.vertices.reserve(tin->numVertices() * 3);
         for (uint32_t i = 0; i < tin->numVertices(); i++) {
-            double x, y, z;
+            double x = 0.0, y = 0.0, z = 0.0; // Initialize to zero
             tin->vertices[i]->getApproxXYZCoordinates(x, y, z);
+            
+            // Verify coordinates are valid before adding
+            if (std::isnan(x) || std::isinf(x) || 
+                std::isnan(y) || std::isinf(y) || 
+                std::isnan(z) || std::isinf(z)) {
+                // Skip invalid vertices or fail the computation
+                result = CDTResult(); // Reset to failed state
+                delete tin;
+                return result;
+            }
+            
             result.vertices.push_back(x);
             result.vertices.push_back(y);
             result.vertices.push_back(z);
@@ -80,10 +92,25 @@ CDTResult computeCDT(const std::vector<double>& inputVertices,
         uint32_t numTets = tin->numTets();
         for (uint64_t t = 0; t < numTets; t++) {
             if (!tin->isGhost(t) && tin->mark_tetrahedra[t] == DT_IN) {
-                result.tetrahedra.push_back(tin->tet_node[t * 4]);
-                result.tetrahedra.push_back(tin->tet_node[t * 4 + 1]);
-                result.tetrahedra.push_back(tin->tet_node[t * 4 + 2]);
-                result.tetrahedra.push_back(tin->tet_node[t * 4 + 3]);
+                uint32_t v0 = tin->tet_node[t * 4];
+                uint32_t v1 = tin->tet_node[t * 4 + 1];
+                uint32_t v2 = tin->tet_node[t * 4 + 2];
+                uint32_t v3 = tin->tet_node[t * 4 + 3];
+                
+                // Verify vertex indices are valid
+                uint32_t maxVertexIndex = tin->numVertices();
+                if (v0 >= maxVertexIndex || v1 >= maxVertexIndex || 
+                    v2 >= maxVertexIndex || v3 >= maxVertexIndex ||
+                    v0 == INFINITE_VERTEX || v1 == INFINITE_VERTEX ||
+                    v2 == INFINITE_VERTEX || v3 == INFINITE_VERTEX) {
+                    // Skip invalid tetrahedra
+                    continue;
+                }
+                
+                result.tetrahedra.push_back(v0);
+                result.tetrahedra.push_back(v1);
+                result.tetrahedra.push_back(v2);
+                result.tetrahedra.push_back(v3);
             }
         }
         result.numTetrahedra = result.tetrahedra.size() / 4;
@@ -127,6 +154,11 @@ int testFunction(int a, int b) {
     return a + b;
 }
 
+// Debug function to help troubleshoot issues
+std::string debugInfo() {
+    return "CDT WebAssembly Bindings v1.0 - Debug build";
+}
+
 // Helper functions to convert JavaScript arrays to std::vector
 std::vector<double> valToDoubleVector(const emscripten::val& jsArray) {
     std::vector<double> result;
@@ -148,20 +180,83 @@ std::vector<uint32_t> valToUint32Vector(const emscripten::val& jsArray) {
     return result;
 }
 
-// Wrapper functions to handle JavaScript arrays and default parameters
-CDTResult computeCDT_wrapper(const emscripten::val& jsVertices, 
-                            const emscripten::val& jsTriangles) {
-    auto vertices = valToDoubleVector(jsVertices);
-    auto triangles = valToUint32Vector(jsTriangles);
-    return computeCDT(vertices, triangles, false, false);
+// JavaScript-friendly result structure
+struct JSCDTResult {
+    emscripten::val vertices;  // JavaScript array
+    emscripten::val tetrahedra; // JavaScript array
+    uint32_t numInputVertices;
+    uint32_t numSteinerVertices;
+    uint32_t numTetrahedra;
+    bool isPolyhedron;
+    bool success;
+    
+    JSCDTResult() : numInputVertices(0), numSteinerVertices(0), numTetrahedra(0), 
+                    isPolyhedron(false), success(false) {
+        vertices = emscripten::val::array();
+        tetrahedra = emscripten::val::array();
+    }
+};
+
+// Convert CDTResult to JSCDTResult with proper JavaScript arrays
+JSCDTResult toJSResult(const CDTResult& result) {
+    JSCDTResult jsResult;
+    jsResult.numInputVertices = result.numInputVertices;
+    jsResult.numSteinerVertices = result.numSteinerVertices;
+    jsResult.numTetrahedra = result.numTetrahedra;
+    jsResult.isPolyhedron = result.isPolyhedron;
+    jsResult.success = result.success;
+    
+    // Convert vertices vector to JavaScript array
+    jsResult.vertices = emscripten::val::array();
+    for (size_t i = 0; i < result.vertices.size(); ++i) {
+        double val = result.vertices[i];
+        // Check for invalid values
+        if (std::isnan(val) || std::isinf(val)) {
+            // If we have invalid values, mark as failed and return empty arrays
+            jsResult.success = false;
+            jsResult.vertices = emscripten::val::array();
+            jsResult.tetrahedra = emscripten::val::array();
+            jsResult.numTetrahedra = 0;
+            return jsResult;
+        }
+        jsResult.vertices.set(i, val);
+    }
+    
+    // Convert tetrahedra vector to JavaScript array
+    jsResult.tetrahedra = emscripten::val::array();
+    for (size_t i = 0; i < result.tetrahedra.size(); ++i) {
+        uint32_t val = result.tetrahedra[i];
+        // Check for invalid vertex indices (should be less than total vertex count)
+        if (val == INFINITE_VERTEX || (result.vertices.size() > 0 && val >= result.vertices.size() / 3)) {
+            // If we have invalid indices, mark as failed and return empty arrays
+            jsResult.success = false;
+            jsResult.vertices = emscripten::val::array();
+            jsResult.tetrahedra = emscripten::val::array();
+            jsResult.numTetrahedra = 0;
+            return jsResult;
+        }
+        jsResult.tetrahedra.set(i, val);
+    }
+    
+    return jsResult;
 }
 
-CDTResult computeCDT_withOptions(const emscripten::val& jsVertices, 
-                                const emscripten::val& jsTriangles,
-                                bool addBoundingBox, bool verbose) {
+// Wrapper functions to handle JavaScript arrays and default parameters
+JSCDTResult computeCDT_wrapper(const emscripten::val& jsVertices, 
+                              const emscripten::val& jsTriangles) {
     auto vertices = valToDoubleVector(jsVertices);
     auto triangles = valToUint32Vector(jsTriangles);
-    return computeCDT(vertices, triangles, addBoundingBox, verbose);
+    auto result = computeCDT(vertices, triangles, false, false);
+    return toJSResult(result);
+}
+
+JSCDTResult computeCDT_withOptions(const emscripten::val& jsVertices, 
+                                  const emscripten::val& jsTriangles,
+                                  bool addBoundingBox, bool verbose) {
+    auto vertices = valToDoubleVector(jsVertices);
+    auto triangles = valToUint32Vector(jsTriangles);
+    auto result = computeCDT(vertices, triangles, addBoundingBox, verbose);
+    return toJSResult(result);
 }
 
 // Wrapper for validateMesh to handle JavaScript arrays
@@ -175,20 +270,17 @@ MeshInfo validateMesh_wrapper(const emscripten::val& jsVertices,
 EMSCRIPTEN_BINDINGS(cdt_module) {
     // Test function to verify bindings work
     emscripten::function("testFunction", &testFunction);
+    emscripten::function("debugInfo", &debugInfo);
     
-    // Register vector types first
-    register_vector<double>("VectorDouble");
-    register_vector<uint32_t>("VectorUint32");
-    
-    // Register CDTResult structure
-    value_object<CDTResult>("CDTResult")
-        .field("vertices", &CDTResult::vertices)
-        .field("tetrahedra", &CDTResult::tetrahedra)
-        .field("numInputVertices", &CDTResult::numInputVertices)
-        .field("numSteinerVertices", &CDTResult::numSteinerVertices)
-        .field("numTetrahedra", &CDTResult::numTetrahedra)
-        .field("isPolyhedron", &CDTResult::isPolyhedron)
-        .field("success", &CDTResult::success);
+    // Register JSCDTResult structure with JavaScript-friendly arrays
+    value_object<JSCDTResult>("CDTResult")
+        .field("vertices", &JSCDTResult::vertices)
+        .field("tetrahedra", &JSCDTResult::tetrahedra)
+        .field("numInputVertices", &JSCDTResult::numInputVertices)
+        .field("numSteinerVertices", &JSCDTResult::numSteinerVertices)
+        .field("numTetrahedra", &JSCDTResult::numTetrahedra)
+        .field("isPolyhedron", &JSCDTResult::isPolyhedron)
+        .field("success", &JSCDTResult::success);
     
     // Register MeshInfo structure
     value_object<MeshInfo>("MeshInfo")
@@ -196,7 +288,7 @@ EMSCRIPTEN_BINDINGS(cdt_module) {
         .field("numTriangles", &MeshInfo::numTriangles)
         .field("valid", &MeshInfo::valid);
     
-    // Register functions - now accepting JavaScript arrays directly
+    // Register functions - now accepting JavaScript arrays directly and returning JS-friendly results
     emscripten::function("computeCDT", &computeCDT_wrapper);
     emscripten::function("computeCDTWithOptions", &computeCDT_withOptions);
     emscripten::function("validateMesh", &validateMesh_wrapper);
