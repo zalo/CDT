@@ -43,7 +43,7 @@ const triangles = [
 ];
 
 // Compute tetrahedralization
-const result = CDT.computeCDT(vertices, triangles);
+const result = CDT.computeCDTWithOptions(vertices, triangles, false, false);
 
 if (result.success) {
   console.log(`Generated ${result.numTetrahedra} tetrahedra`);
@@ -85,15 +85,25 @@ if (result.isPolyhedron) {
 
 ### Functions
 
-#### `computeCDT(vertices, triangles, addBoundingBox?, verbose?)`
+#### `computeCDTWithOptions(vertices, triangles, addBoundingBox, verbose)`
 
-Computes the Constrained Delaunay Tetrahedrization.
+Computes the Constrained Delaunay Tetrahedrization with full options.
 
 **Parameters:**
 - `vertices: number[]` - Vertex coordinates as [x1,y1,z1, x2,y2,z2, ...]
 - `triangles: number[]` - Triangle vertex indices as [t1_v1,t1_v2,t1_v3, t2_v1,...]
-- `addBoundingBox?: boolean` - Whether to add bounding box vertices (default: false)
-- `verbose?: boolean` - Enable verbose console output (default: false)
+- `addBoundingBox: boolean` - Whether to add bounding box vertices
+- `verbose: boolean` - Enable verbose console output
+
+**Returns:** `CDTResult`
+
+#### `computeCDT(vertices, triangles)`
+
+Simplified version with default options (no bounding box, no verbose output).
+
+**Parameters:**
+- `vertices: number[]` - Vertex coordinates
+- `triangles: number[]` - Triangle vertex indices
 
 **Returns:** `CDTResult`
 
@@ -144,16 +154,16 @@ interface MeshInfo {
 ### Build Commands
 
 ```bash
-# Build WebAssembly module
+# Build WebAssembly module (LGPL mode)
 mkdir build-emscripten
 cd build-emscripten
-emcmake cmake .. -DEMSCRIPTEN=ON -DLGPL=OFF
+emcmake cmake .. -DEMSCRIPTEN=ON -DLGPL=ON
 emmake make -j4
 
-# Build native version (for comparison/testing)
+# Build native version (LGPL mode for comparison/testing)
 mkdir build-native  
 cd build-native
-cmake .. -DLGPL=OFF
+cmake .. -DLGPL=ON
 make -j4
 ```
 
@@ -171,9 +181,10 @@ Key features:
 
 ## License
 
-This WebAssembly binding follows the same license as the original CDT library:
-- GPL-3.0 by default (includes optimized algorithms)
-- LGPL-3.0 when built with `-DLGPL=ON` (slightly slower but more permissive)
+This WebAssembly binding is built in LGPL mode:
+- **LGPL-3.0** - More permissive licensing suitable for web distribution
+- Uses slightly slower algorithms compared to GPL mode, but provides better licensing compatibility
+- To build in GPL mode (faster but more restrictive), use `-DLGPL=OFF` during build
 
 ## Contributing
 

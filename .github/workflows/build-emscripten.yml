@@ -26,7 +26,7 @@ jobs:
       run: |
         mkdir -p build-emscripten
         cd build-emscripten
-        emcmake cmake .. -DEMSCRIPTEN=ON -DLGPL=OFF
+        emcmake cmake .. -DEMSCRIPTEN=ON -DLGPL=ON
         emmake make -j4 VERBOSE=1
         
     - name: Debug generated files
@@ -118,15 +118,15 @@ jobs:
         fi
         cp cdt.d.ts dist/
         cp README_WASM.md dist/README.md
-        cp demo.html dist/
+        cp demo.html dist/index.html
         
         # Create package.json for the distribution
         if [ -f build-emscripten/cdt.wasm ]; then
           # Separate WASM file mode
-          FILES_ARRAY='["cdt.js", "cdt.wasm", "cdt.d.ts", "README.md"]'
+          FILES_ARRAY='["cdt.js", "cdt.wasm", "cdt.d.ts", "README.md", "index.html"]'
         else
           # Single file mode (WASM embedded in JS)
-          FILES_ARRAY='["cdt.js", "cdt.d.ts", "README.md"]'
+          FILES_ARRAY='["cdt.js", "cdt.d.ts", "README.md", "index.html"]'
         fi
         
         cat > dist/package.json << EOF
@@ -139,7 +139,7 @@ jobs:
           "files": $FILES_ARRAY,
           "keywords": ["webassembly", "mesh", "delaunay", "tetrahedrization", "geometry", "cdt"],
           "author": "CDT Contributors",
-          "license": "GPL-3.0",
+          "license": "LGPL-3.0",
           "repository": {
             "type": "git",
             "url": "https://github.com/zalo/CDT.git"
@@ -219,7 +219,6 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./dist
-        destination_dir: wasm
         
   build-native:
     runs-on: ubuntu-latest
@@ -231,7 +230,7 @@ jobs:
       run: |
         mkdir -p build-native
         cd build-native
-        cmake .. -DLGPL=OFF
+        cmake .. -DLGPL=ON
         make -j4
         
     - name: Test Native Binary

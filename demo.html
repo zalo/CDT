@@ -118,39 +118,51 @@
     </div>
 
     <script>
-        // Placeholder for CDT module (would be loaded from cdt.js)
+        // CDT WebAssembly module
         let CDT = null;
         
-        // Simulate loading the WebAssembly module
-        function loadCDTModule() {
-            // In a real implementation, this would be:
-            // import('./cdt.js').then(module => { CDT = module.default; ... });
-            
-            // For demo purposes, we'll simulate the API
-            CDT = {
-                computeCDT: function(vertices, triangles, addBoundingBox = false, verbose = false) {
-                    // Simulate computation
-                    return {
-                        vertices: [...vertices, 0.5, 0.5, 0.5], // Add a Steiner point
-                        tetrahedra: [0, 1, 2, 8, 2, 3, 0, 8, 4, 5, 6, 8, 6, 7, 4, 8, 0, 1, 5, 8, 1, 2, 6, 8],
-                        numInputVertices: vertices.length / 3,
-                        numSteinerVertices: 1,
-                        numTetrahedra: 6,
-                        isPolyhedron: true,
-                        success: true
-                    };
-                },
-                validateMesh: function(vertices, triangles) {
-                    return {
-                        numVertices: vertices.length / 3,
-                        numTriangles: triangles.length / 3,
-                        valid: vertices.length % 3 === 0 && triangles.length % 3 === 0 && vertices.length > 0 && triangles.length > 0
-                    };
-                }
-            };
-            
-            document.getElementById('computeBtn').disabled = false;
-            showResult('CDT module loaded successfully! (Simulated)', 'result');
+        // Load the actual WebAssembly module
+        async function loadCDTModule() {
+            try {
+                // Load the CDT module factory
+                const CDTFactory = (await import('./cdt.js')).default;
+                
+                // Initialize the WebAssembly module
+                CDT = await CDTFactory();
+                
+                document.getElementById('computeBtn').disabled = false;
+                showResult('CDT module loaded successfully!', 'result');
+                
+                console.log('CDT module loaded, available functions:', Object.keys(CDT).filter(k => typeof CDT[k] === 'function'));
+            } catch (error) {
+                console.error('Failed to load CDT module:', error);
+                showResult(`Failed to load CDT module: ${error.message}. Using simulated module for demo.`, 'error');
+                
+                // Fallback to simulated module for demo purposes
+                CDT = {
+                    computeCDTWithOptions: function(vertices, triangles, addBoundingBox = false, verbose = false) {
+                        // Simulate computation
+                        return {
+                            vertices: [...vertices, 0.5, 0.5, 0.5], // Add a Steiner point
+                            tetrahedra: [0, 1, 2, 8, 2, 3, 0, 8, 4, 5, 6, 8, 6, 7, 4, 8, 0, 1, 5, 8, 1, 2, 6, 8],
+                            numInputVertices: vertices.length / 3,
+                            numSteinerVertices: 1,
+                            numTetrahedra: 6,
+                            isPolyhedron: true,
+                            success: true
+                        };
+                    },
+                    validateMesh: function(vertices, triangles) {
+                        return {
+                            numVertices: vertices.length / 3,
+                            numTriangles: triangles.length / 3,
+                            valid: vertices.length % 3 === 0 && triangles.length % 3 === 0 && vertices.length > 0 && triangles.length > 0
+                        };
+                    }
+                };
+                
+                document.getElementById('computeBtn').disabled = false;
+            }
         }
         
         function parseNumbers(str) {
@@ -181,7 +193,7 @@
                     return;
                 }
                 
-                const result = CDT.computeCDT(vertices, triangles, addBoundingBox, verbose);
+                const result = CDT.computeCDTWithOptions(vertices, triangles, addBoundingBox, verbose);
                 
                 if (result.success) {
                     let output = `<h3>✓ CDT Computation Successful</h3>`;
@@ -255,8 +267,9 @@
         }
         
         // Initialize the demo
-        loadCDTModule();
-        loadCube(); // Load default example
+        loadCDTModule().then(() => {
+            loadCube(); // Load default example
+        });
     </script>
 </body>
 </html>
