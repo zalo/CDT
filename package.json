@@ -1,13 +1,13 @@
 {
   "name": "cdt-wasm",
-  "version": "1.0.19",
+  "version": "1.0.25",
   "description": "WebAssembly bindings for Constrained Delaunay Tetrahedrization",
   "main": "cdt.js",
   "types": "cdt.d.ts",
-  "files": ["cdt.js", "cdt.d.ts", "README.md"],
+  "files": ["cdt.js", "cdt.d.ts", "README.md", "index.html"],
   "keywords": ["webassembly", "mesh", "delaunay", "tetrahedrization", "geometry", "cdt"],
   "author": "CDT Contributors",
-  "license": "GPL-3.0",
+  "license": "LGPL-3.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/zalo/CDT.git"
