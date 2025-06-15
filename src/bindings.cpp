@@ -135,7 +135,7 @@ CDTResult computeCDT_withOptions(const std::vector<double>& inputVertices,
 }
 
 EMSCRIPTEN_BINDINGS(cdt_module) {
-    // Register vector types
+    // Register vector types first
     register_vector<double>("VectorDouble");
     register_vector<uint32_t>("VectorUint32");
     
@@ -155,8 +155,8 @@ EMSCRIPTEN_BINDINGS(cdt_module) {
         .field("numTriangles", &MeshInfo::numTriangles)
         .field("valid", &MeshInfo::valid);
     
-    // Register main functions with explicit overloads for default parameters
-    emscripten::function("computeCDT", &computeCDT_wrapper);
-    emscripten::function("computeCDTWithOptions", &computeCDT_withOptions);
-    emscripten::function("validateMesh", &validateMesh);
+    // Register functions - use full namespace qualifier and explicit types
+    function("computeCDT", select_overload<CDTResult(const std::vector<double>&, const std::vector<uint32_t>&)>(&computeCDT_wrapper));
+    function("computeCDTWithOptions", select_overload<CDTResult(const std::vector<double>&, const std::vector<uint32_t>&, bool, bool)>(&computeCDT_withOptions));
+    function("validateMesh", select_overload<MeshInfo(const std::vector<double>&, const std::vector<uint32_t>&)>(&validateMesh));
 }
