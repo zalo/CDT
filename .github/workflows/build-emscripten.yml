@@ -35,7 +35,7 @@ jobs:
         echo "=== Generated files ==="
         ls -la
         echo "=== File sizes ==="
-        du -h cdt.js cdt.wasm
+        du -h cdt.* || du -h cdt.js
         echo "=== JS file head (first 100 lines) ==="
         head -100 cdt.js
         echo "=== JS file tail (last 100 lines) ==="
@@ -112,12 +112,23 @@ jobs:
       run: |
         mkdir -p dist
         cp build-emscripten/cdt.js dist/
-        cp build-emscripten/cdt.wasm dist/
+        # Copy wasm file only if it exists (not in single-file mode)
+        if [ -f build-emscripten/cdt.wasm ]; then
+          cp build-emscripten/cdt.wasm dist/
+        fi
         cp cdt.d.ts dist/
         cp README_WASM.md dist/README.md
         cp demo.html dist/
         
         # Create package.json for the distribution
+        if [ -f build-emscripten/cdt.wasm ]; then
+          # Separate WASM file mode
+          FILES_ARRAY='["cdt.js", "cdt.wasm", "cdt.d.ts", "README.md"]'
+        else
+          # Single file mode (WASM embedded in JS)
+          FILES_ARRAY='["cdt.js", "cdt.d.ts", "README.md"]'
+        fi
+        
         cat > dist/package.json << EOF
         {
           "name": "cdt-wasm",
@@ -125,7 +136,7 @@ jobs:
           "description": "WebAssembly bindings for Constrained Delaunay Tetrahedrization",
           "main": "cdt.js",
           "types": "cdt.d.ts",
-          "files": ["cdt.js", "cdt.wasm", "cdt.d.ts", "README.md"],
+          "files": $FILES_ARRAY,
           "keywords": ["webassembly", "mesh", "delaunay", "tetrahedrization", "geometry", "cdt"],
           "author": "CDT Contributors",
           "license": "GPL-3.0",
