@@ -27,12 +27,21 @@ jobs:
         mkdir -p build-emscripten
         cd build-emscripten
         emcmake cmake .. -DEMSCRIPTEN=ON -DLGPL=OFF
-        emmake make -j4
+        emmake make -j4 VERBOSE=1
         
-    - name: List built files
+    - name: Debug generated files
       run: |
-        ls -la build-emscripten/
-        file build-emscripten/cdt.js
+        cd build-emscripten
+        echo "=== Generated files ==="
+        ls -la
+        echo "=== File sizes ==="
+        du -h cdt.js cdt.wasm
+        echo "=== JS file head (first 100 lines) ==="
+        head -100 cdt.js
+        echo "=== JS file tail (last 100 lines) ==="
+        tail -100 cdt.js
+        echo "=== Search for binding-related terms ==="
+        grep -n "EMSCRIPTEN_BINDINGS\|computeCDT\|testFunction\|function" cdt.js | head -20
         
     - name: Test generated JavaScript
       run: |
