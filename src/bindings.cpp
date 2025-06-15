@@ -127,16 +127,49 @@ int testFunction(int a, int b) {
     return a + b;
 }
 
-// Wrapper functions to handle default parameters properly
-CDTResult computeCDT_wrapper(const std::vector<double>& inputVertices, 
-                            const std::vector<uint32_t>& inputTriangles) {
-    return computeCDT(inputVertices, inputTriangles, false, false);
+// Helper functions to convert JavaScript arrays to std::vector
+std::vector<double> valToDoubleVector(const emscripten::val& jsArray) {
+    std::vector<double> result;
+    const auto length = jsArray["length"].as<unsigned>();
+    result.reserve(length);
+    for (unsigned i = 0; i < length; ++i) {
+        result.push_back(jsArray[i].as<double>());
+    }
+    return result;
 }
 
-CDTResult computeCDT_withOptions(const std::vector<double>& inputVertices, 
-                                const std::vector<uint32_t>& inputTriangles,
+std::vector<uint32_t> valToUint32Vector(const emscripten::val& jsArray) {
+    std::vector<uint32_t> result;
+    const auto length = jsArray["length"].as<unsigned>();
+    result.reserve(length);
+    for (unsigned i = 0; i < length; ++i) {
+        result.push_back(jsArray[i].as<uint32_t>());
+    }
+    return result;
+}
+
+// Wrapper functions to handle JavaScript arrays and default parameters
+CDTResult computeCDT_wrapper(const emscripten::val& jsVertices, 
+                            const emscripten::val& jsTriangles) {
+    auto vertices = valToDoubleVector(jsVertices);
+    auto triangles = valToUint32Vector(jsTriangles);
+    return computeCDT(vertices, triangles, false, false);
+}
+
+CDTResult computeCDT_withOptions(const emscripten::val& jsVertices, 
+                                const emscripten::val& jsTriangles,
                                 bool addBoundingBox, bool verbose) {
-    return computeCDT(inputVertices, inputTriangles, addBoundingBox, verbose);
+    auto vertices = valToDoubleVector(jsVertices);
+    auto triangles = valToUint32Vector(jsTriangles);
+    return computeCDT(vertices, triangles, addBoundingBox, verbose);
+}
+
+// Wrapper for validateMesh to handle JavaScript arrays
+MeshInfo validateMesh_wrapper(const emscripten::val& jsVertices, 
+                             const emscripten::val& jsTriangles) {
+    auto vertices = valToDoubleVector(jsVertices);
+    auto triangles = valToUint32Vector(jsTriangles);
+    return validateMesh(vertices, triangles);
 }
 
 EMSCRIPTEN_BINDINGS(cdt_module) {
@@ -163,8 +196,8 @@ EMSCRIPTEN_BINDINGS(cdt_module) {
         .field("numTriangles", &MeshInfo::numTriangles)
         .field("valid", &MeshInfo::valid);
     
-    // Register functions - use full namespace qualifier and explicit types
-    emscripten::function("computeCDT", select_overload<CDTResult(const std::vector<double>&, const std::vector<uint32_t>&)>(&computeCDT_wrapper));
-    emscripten::function("computeCDTWithOptions", select_overload<CDTResult(const std::vector<double>&, const std::vector<uint32_t>&, bool, bool)>(&computeCDT_withOptions));
-    emscripten::function("validateMesh", select_overload<MeshInfo(const std::vector<double>&, const std::vector<uint32_t>&)>(&validateMesh));
+    // Register functions - now accepting JavaScript arrays directly
+    emscripten::function("computeCDT", &computeCDT_wrapper);
+    emscripten::function("computeCDTWithOptions", &computeCDT_withOptions);
+    emscripten::function("validateMesh", &validateMesh_wrapper);
 }
