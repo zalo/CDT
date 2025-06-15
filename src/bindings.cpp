@@ -122,6 +122,18 @@ MeshInfo validateMesh(const std::vector<double>& vertices,
     return info;
 }
 
+// Wrapper functions to handle default parameters properly
+CDTResult computeCDT_wrapper(const std::vector<double>& inputVertices, 
+                            const std::vector<uint32_t>& inputTriangles) {
+    return computeCDT(inputVertices, inputTriangles, false, false);
+}
+
+CDTResult computeCDT_withOptions(const std::vector<double>& inputVertices, 
+                                const std::vector<uint32_t>& inputTriangles,
+                                bool addBoundingBox, bool verbose) {
+    return computeCDT(inputVertices, inputTriangles, addBoundingBox, verbose);
+}
+
 EMSCRIPTEN_BINDINGS(cdt_module) {
     // Register vector types
     register_vector<double>("VectorDouble");
@@ -143,7 +155,8 @@ EMSCRIPTEN_BINDINGS(cdt_module) {
         .field("numTriangles", &MeshInfo::numTriangles)
         .field("valid", &MeshInfo::valid);
     
-    // Register main functions
-    emscripten::function("computeCDT", &computeCDT);
+    // Register main functions with explicit overloads for default parameters
+    emscripten::function("computeCDT", &computeCDT_wrapper);
+    emscripten::function("computeCDTWithOptions", &computeCDT_withOptions);
     emscripten::function("validateMesh", &validateMesh);
 }
