@@ -1,0 +1,153 @@
+name: Build Emscripten Bindings
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-emscripten:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Emscripten
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 'latest'
+        actions-cache-folder: 'emsdk-cache'
+        
+    - name: Verify Emscripten
+      run: emcc -v
+      
+    - name: Build Emscripten Module
+      run: |
+        mkdir -p build-emscripten
+        cd build-emscripten
+        emcmake cmake .. -DEMSCRIPTEN=ON -DLGPL=OFF
+        emmake make -j4
+        
+    - name: List built files
+      run: |
+        ls -la build-emscripten/
+        file build-emscripten/cdt.js
+        
+    - name: Test generated JavaScript
+      run: |
+        cd build-emscripten
+        node -e "
+        const fs = require('fs');
+        if (fs.existsSync('cdt.js')) {
+          console.log('✓ cdt.js generated successfully');
+          const content = fs.readFileSync('cdt.js', 'utf8');
+          if (content.includes('computeCDT')) {
+            console.log('✓ computeCDT function found in generated JS');
+          } else {
+            console.log('✗ computeCDT function not found');
+            process.exit(1);
+          }
+        } else {
+          console.log('✗ cdt.js not found');
+          process.exit(1);
+        }
+        "
+        
+    - name: Create distribution package
+      run: |
+        mkdir -p dist
+        cp build-emscripten/cdt.js dist/
+        cp build-emscripten/cdt.wasm dist/
+        cp cdt.d.ts dist/
+        
+        # Create package.json for the distribution
+        cat > dist/package.json << EOF
+        {
+          "name": "cdt-wasm",
+          "version": "1.0.${{ github.run_number }}",
+          "description": "WebAssembly bindings for Constrained Delaunay Tetrahedrization",
+          "main": "cdt.js",
+          "types": "cdt.d.ts",
+          "files": ["cdt.js", "cdt.wasm", "cdt.d.ts"],
+          "keywords": ["webassembly", "mesh", "delaunay", "tetrahedrization", "geometry"],
+          "author": "CDT Contributors",
+          "license": "GPL-3.0",
+          "repository": {
+            "type": "git",
+            "url": "https://github.com/zalo/CDT.git"
+          }
+        }
+        EOF
+        
+        # Create README for the package
+        cat > dist/README.md << 'EOF'
+        # CDT WebAssembly Bindings
+        
+        WebAssembly bindings for the CDT (Constrained Delaunay Tetrahedrization) library.
+        
+        ## Usage
+        
+        ```javascript
+        import CDT from 'cdt-wasm';
+        
+        // Example: tetrahedralize a cube
+        const vertices = [
+          0, 0, 0,  // vertex 0
+          1, 0, 0,  // vertex 1  
+          1, 1, 0,  // vertex 2
+          0, 1, 0,  // vertex 3
+          0, 0, 1,  // vertex 4
+          1, 0, 1,  // vertex 5
+          1, 1, 1,  // vertex 6
+          0, 1, 1   // vertex 7
+        ];
+        
+        const triangles = [
+          0, 1, 2, 2, 3, 0,  // bottom face
+          4, 7, 6, 6, 5, 4,  // top face
+          0, 4, 5, 5, 1, 0,  // front face
+          2, 6, 7, 7, 3, 2,  // back face
+          0, 3, 7, 7, 4, 0,  // left face
+          1, 5, 6, 6, 2, 1   // right face
+        ];
+        
+        const result = CDT.computeCDT(vertices, triangles);
+        
+        if (result.success) {
+          console.log('Tetrahedrization succeeded!');
+          console.log(`Generated ${result.numTetrahedra} tetrahedra`);
+          console.log(`Added ${result.numSteinerVertices} Steiner points`);
+        }
+        ```
+        
+        ## API
+        
+        See the TypeScript definitions in `cdt.d.ts` for complete API documentation.
+        EOF
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: cdt-wasm-${{ github.sha }}
+        path: dist/
+        retention-days: 30
+        
+  build-native:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Native Version
+      run: |
+        mkdir -p build-native
+        cd build-native
+        cmake .. -DLGPL=OFF
+        make -j4
+        
+    - name: Test Native Binary
+      run: |
+        cd build-native
+        ./cdt --help || true  # Show help message
+        echo "✓ Native binary built successfully"
