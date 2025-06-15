@@ -125,7 +125,16 @@
         async function loadCDTModule() {
             try {
                 // Load the CDT module factory
-                const CDTFactory = (await import('./cdt.js')).default;
+                console.log('Attempting to load CDT module from ./cdt.js');
+                const module = await import('./cdt.js');
+                console.log('Module loaded, available exports:', Object.keys(module));
+                
+                const CDTFactory = module.default;
+                if (typeof CDTFactory !== 'function') {
+                    throw new Error(`CDTFactory is not a function. Got ${typeof CDTFactory}. Available exports: ${Object.keys(module).join(', ')}`);
+                }
+                
+                console.log('CDTFactory loaded, initializing WebAssembly module...');
                 
                 // Initialize the WebAssembly module
                 CDT = await CDTFactory();
