@@ -1,0 +1,3 @@
+/home/runner/work/CDT/CDT/test-build/CMakeFiles/cdt.dir
+/home/runner/work/CDT/CDT/test-build/CMakeFiles/edit_cache.dir
+/home/runner/work/CDT/CDT/test-build/CMakeFiles/rebuild_cache.dir
