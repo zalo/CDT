@@ -41,6 +41,11 @@
 
 inline void initFPU()
 {
+#ifdef __EMSCRIPTEN__
+	// No FPU control needed for WebAssembly
+	return;
+#endif
+
 #ifdef IS64BITPLATFORM
 #ifdef USE_SIMD_INSTRUCTIONS
 //	_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
@@ -52,9 +57,12 @@ inline void initFPU()
 #ifdef ISVISUALSTUDIO
 	_control87(_PC_53, _MCW_PC); /* Set FPU control word for double precision. */
 #else
+#ifndef __EMSCRIPTEN__
+	#include <fpu_control.h>
 	int cword;
 	cword = 4722;                 /* set FPU control word for double precision */
 	_FPU_SETCW(cword);
+#endif
 #endif
 #endif
 }
