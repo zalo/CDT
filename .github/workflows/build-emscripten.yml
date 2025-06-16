@@ -140,7 +140,6 @@ jobs:
         fi
         cp cdt.d.ts dist/
         cp README_WASM.md dist/README.md
-        cp demo.html dist/index.html
         
         # Create package.json for the distribution
         if [ -f build-emscripten/cdt.wasm ]; then
