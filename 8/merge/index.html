@@ -412,42 +412,65 @@
         
         function loadSampleFile(filename) {
             console.log('Loading sample file:', filename);
-            fetch(`Input_file/${filename}`)
-                .then(response => {
-                    console.log('Fetch response status:', response.status, response.statusText);
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    return response.text();
-                })
-                .then(content => {
-                    console.log('Fetch content received, length:', content.length);
-                    
-                    const meshData = parseOFF(content);
-                    console.log('Parse result:', meshData);
-                    
-                    if (meshData && meshData.vertices && meshData.triangles) {
-                        console.log('Parse successful, vertices:', meshData.vertices.length / 3, 'triangles:', meshData.triangles.length / 3);
-                        
-                        // Update input fields
-                        document.getElementById('vertices').value = meshData.vertices.join(',');
-                        document.getElementById('triangles').value = meshData.triangles.join(',');
-                        
-                        // Update 3D viewer (with null check)
-                        if (inputViewer) {
-                            inputViewer.setMesh(meshData.vertices, meshData.triangles);
+            
+            // Try multiple paths to handle different deployment scenarios
+            const paths = [
+                `Input_file/${filename}`,  // Original relative path
+                `./${filename}`,           // Try in root directory
+                `./Input_file/${filename}` // Explicit relative path
+            ];
+            
+            let currentPath = 0;
+            
+            function tryNextPath() {
+                if (currentPath >= paths.length) {
+                    showResult(`Failed to load ${filename}: File not found. If you're viewing this on GitHub Pages, please try the file upload feature instead, or download the repository to run locally.`, 'error');
+                    return;
+                }
+                
+                const path = paths[currentPath];
+                console.log(`Trying path ${currentPath + 1}/${paths.length}: ${path}`);
+                
+                fetch(path)
+                    .then(response => {
+                        console.log('Fetch response status:', response.status, response.statusText);
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                         }
+                        return response.text();
+                    })
+                    .then(content => {
+                        console.log('Fetch content received, length:', content.length);
                         
-                        showResult(`Loaded ${filename}: ${meshData.vertices.length/3} vertices, ${meshData.triangles.length/3} triangles`, 'result');
-                    } else {
-                        console.error('Parse failed, meshData:', meshData);
-                        showResult(`Failed to parse ${filename} - invalid mesh data`, 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Fetch error:', error);
-                    showResult(`Failed to load ${filename}: ${error.message}`, 'error');
-                });
+                        const meshData = parseOFF(content);
+                        console.log('Parse result:', meshData);
+                        
+                        if (meshData && meshData.vertices && meshData.triangles) {
+                            console.log('Parse successful, vertices:', meshData.vertices.length / 3, 'triangles:', meshData.triangles.length / 3);
+                            
+                            // Update input fields
+                            document.getElementById('vertices').value = meshData.vertices.join(',');
+                            document.getElementById('triangles').value = meshData.triangles.join(',');
+                            
+                            // Update 3D viewer (with null check)
+                            if (inputViewer) {
+                                inputViewer.setMesh(meshData.vertices, meshData.triangles);
+                            }
+                            
+                            showResult(`Loaded ${filename}: ${meshData.vertices.length/3} vertices, ${meshData.triangles.length/3} triangles`, 'result');
+                        } else {
+                            console.error('Parse failed, meshData:', meshData);
+                            showResult(`Failed to parse ${filename} - invalid mesh data`, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Fetch error for path:', path, error);
+                        currentPath++;
+                        tryNextPath();
+                    });
+            }
+            
+            tryNextPath();
         }
         
         // Mesh file parsers
