@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Parser Test</title>
+</head>
+<body>
+    <h1>Parser Test</h1>
+    <button onclick="testBracket()">Test Bracket</button>
+    <div id="result"></div>
+    
+    <script>
+        function parseOFF(content) {
+            console.log('parseOFF called with content length:', content.length);
+            
+            const lines = content.trim().split('\n');
+            let lineIndex = 0;
+            
+            console.log('Total lines:', lines.length);
+            
+            // Skip header
+            if (lines[0].trim() === 'OFF') {
+                console.log('Found OFF header');
+                lineIndex = 1;
+            }
+            
+            // Read vertex/face counts
+            console.log('Reading counts from line:', lineIndex, 'content:', lines[lineIndex]);
+            const counts = lines[lineIndex].trim().split(/\s+/).map(n => parseInt(n));
+            const numVertices = counts[0];
+            const numFaces = counts[1];
+            console.log('numVertices:', numVertices, 'numFaces:', numFaces);
+            lineIndex++;
+            
+            // Read vertices
+            const vertices = [];
+            console.log('Reading', numVertices, 'vertices starting from line', lineIndex);
+            for (let i = 0; i < numVertices; i++) {
+                const line = lines[lineIndex + i];
+                const coords = line.trim().split(/\s+/).map(n => parseFloat(n));
+                vertices.push(coords[0], coords[1], coords[2]);
+            }
+            lineIndex += numVertices;
+            
+            console.log('Read vertices:', vertices.length / 3);
+            
+            // Read faces
+            const triangles = [];
+            console.log('Reading', numFaces, 'faces starting from line', lineIndex);
+            for (let i = 0; i < numFaces; i++) {
+                const line = lines[lineIndex + i];
+                const face = line.trim().split(/\s+/).map(n => parseInt(n));
+                const numVerts = face[0];
+                if (numVerts === 3) {
+                    triangles.push(face[1], face[2], face[3]);
+                } else if (numVerts === 4) {
+                    // Convert quad to two triangles
+                    triangles.push(face[1], face[2], face[3]);
+                    triangles.push(face[1], face[3], face[4]);
+                }
+            }
+            
+            console.log('Read triangles:', triangles.length / 3);
+            console.log('Final result - vertices array length:', vertices.length, 'triangles array length:', triangles.length);
+            
+            return { vertices, triangles };
+        }
+        
+        function testBracket() {
+            console.log('Testing bracket file...');
+            fetch('Input_file/bracket.off')
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    return response.text();
+                })
+                .then(content => {
+                    console.log('Content length:', content.length);
+                    const result = parseOFF(content);
+                    
+                    document.getElementById('result').innerHTML = `
+                        <h2>Results:</h2>
+                        <p>Vertices: ${result.vertices.length / 3}</p>
+                        <p>Triangles: ${result.triangles.length / 3}</p>
+                        <p>First vertex: ${result.vertices.slice(0, 3).join(', ')}</p>
+                        <p>First triangle: ${result.triangles.slice(0, 3).join(', ')}</p>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('result').innerHTML = `<p>Error: ${error.message}</p>`;
+                });
+        }
+    </script>
+</body>
+</html>

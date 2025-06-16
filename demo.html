@@ -422,13 +422,11 @@
                 })
                 .then(content => {
                     console.log('Fetch content received, length:', content.length);
-                    console.log('Content preview:', content.substring(0, 200));
                     
                     const meshData = parseOFF(content);
                     console.log('Parse result:', meshData);
                     
-                    if (meshData && meshData.vertices && meshData.triangles && 
-                        meshData.vertices.length > 0 && meshData.triangles.length > 0) {
+                    if (meshData && meshData.vertices && meshData.triangles) {
                         console.log('Parse successful, vertices:', meshData.vertices.length / 3, 'triangles:', meshData.triangles.length / 3);
                         
                         // Update input fields
@@ -456,24 +454,10 @@
         function parseOFF(content) {
             console.log('parseOFF called with content length:', content.length);
             
-            if (!content || content.length === 0) {
-                console.error('Empty content provided to parseOFF');
-                return null;
-            }
-            
-            console.log('First 100 chars:', content.substring(0, 100));
-            
             const lines = content.trim().split('\n');
             let lineIndex = 0;
             
             console.log('Total lines:', lines.length);
-            
-            if (lines.length < 3) {
-                console.error('File too short, need at least 3 lines');
-                return null;
-            }
-            
-            console.log('First 3 lines:', lines.slice(0, 3));
             
             // Skip header
             if (lines[0].trim() === 'OFF') {
@@ -482,52 +466,19 @@
             }
             
             // Read vertex/face counts
-            if (lineIndex >= lines.length) {
-                console.error('No counts line found');
-                return null;
-            }
-            
             console.log('Reading counts from line:', lineIndex, 'content:', lines[lineIndex]);
             const counts = lines[lineIndex].trim().split(/\s+/).map(n => parseInt(n));
-            console.log('Parsed counts:', counts);
-            
-            if (counts.length < 2 || counts.some(isNaN)) {
-                console.error('Invalid counts:', counts);
-                return null;
-            }
-            
             const numVertices = counts[0];
             const numFaces = counts[1];
             console.log('numVertices:', numVertices, 'numFaces:', numFaces);
-            
-            if (numVertices <= 0 || numFaces <= 0) {
-                console.error('Invalid vertex/face counts:', numVertices, numFaces);
-                return null;
-            }
-            
             lineIndex++;
             
             // Read vertices
             const vertices = [];
-            console.log('Reading vertices from line', lineIndex, 'to', lineIndex + numVertices - 1);
-            
+            console.log('Reading', numVertices, 'vertices starting from line', lineIndex);
             for (let i = 0; i < numVertices; i++) {
-                if (lineIndex + i >= lines.length) {
-                    console.error('Not enough vertex lines, expected', numVertices, 'but file ends at line', lines.length);
-                    return null;
-                }
-                
                 const line = lines[lineIndex + i];
-                if (!line || line.trim() === '') {
-                    console.error('Empty vertex line at index:', lineIndex + i);
-                    return null;
-                }
-                
                 const coords = line.trim().split(/\s+/).map(n => parseFloat(n));
-                if (coords.length < 3 || coords.some(isNaN)) {
-                    console.error('Invalid vertex coordinates at line:', lineIndex + i, 'coords:', coords);
-                    return null;
-                }
                 vertices.push(coords[0], coords[1], coords[2]);
             }
             lineIndex += numVertices;
@@ -536,26 +487,10 @@
             
             // Read faces
             const triangles = [];
-            console.log('Reading faces from line', lineIndex, 'to', lineIndex + numFaces - 1);
-            
+            console.log('Reading', numFaces, 'faces starting from line', lineIndex);
             for (let i = 0; i < numFaces; i++) {
-                if (lineIndex + i >= lines.length) {
-                    console.error('Not enough face lines, expected', numFaces, 'but file ends at line', lines.length);
-                    return null;
-                }
-                
                 const line = lines[lineIndex + i];
-                if (!line || line.trim() === '') {
-                    console.error('Empty face line at index:', lineIndex + i);
-                    return null;
-                }
-                
                 const face = line.trim().split(/\s+/).map(n => parseInt(n));
-                if (face.length < 4 || face.some(isNaN)) {
-                    console.error('Invalid face data at line:', lineIndex + i, 'face:', face);
-                    return null;
-                }
-                
                 const numVerts = face[0];
                 if (numVerts === 3) {
                     triangles.push(face[1], face[2], face[3]);
@@ -567,16 +502,9 @@
             }
             
             console.log('Read triangles:', triangles.length / 3);
-            console.log('Returning vertices:', vertices.length, 'triangles:', triangles.length);
+            console.log('Final result - vertices array length:', vertices.length, 'triangles array length:', triangles.length);
             
-            const result = { vertices, triangles };
-            
-            if (vertices.length === 0 || triangles.length === 0) {
-                console.error('Parsed mesh has no vertices or triangles');
-                return null;
-            }
-            
-            return result;
+            return { vertices, triangles };
         }
         
         function parseOBJ(content) {
