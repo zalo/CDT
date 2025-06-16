@@ -411,11 +411,24 @@
         }
         
         function loadSampleFile(filename) {
+            console.log('Loading sample file:', filename);
             fetch(`Input_file/${filename}`)
-                .then(response => response.text())
+                .then(response => {
+                    console.log('Fetch response status:', response.status, response.statusText);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.text();
+                })
                 .then(content => {
+                    console.log('Fetch content received, length:', content.length);
+                    
                     const meshData = parseOFF(content);
-                    if (meshData) {
+                    console.log('Parse result:', meshData);
+                    
+                    if (meshData && meshData.vertices && meshData.triangles) {
+                        console.log('Parse successful, vertices:', meshData.vertices.length / 3, 'triangles:', meshData.triangles.length / 3);
+                        
                         // Update input fields
                         document.getElementById('vertices').value = meshData.vertices.join(',');
                         document.getElementById('triangles').value = meshData.triangles.join(',');
@@ -427,42 +440,57 @@
                         
                         showResult(`Loaded ${filename}: ${meshData.vertices.length/3} vertices, ${meshData.triangles.length/3} triangles`, 'result');
                     } else {
-                        showResult(`Failed to parse ${filename}`, 'error');
+                        console.error('Parse failed, meshData:', meshData);
+                        showResult(`Failed to parse ${filename} - invalid mesh data`, 'error');
                     }
                 })
                 .catch(error => {
+                    console.error('Fetch error:', error);
                     showResult(`Failed to load ${filename}: ${error.message}`, 'error');
                 });
         }
         
         // Mesh file parsers
         function parseOFF(content) {
+            console.log('parseOFF called with content length:', content.length);
+            
             const lines = content.trim().split('\n');
             let lineIndex = 0;
             
+            console.log('Total lines:', lines.length);
+            
             // Skip header
             if (lines[0].trim() === 'OFF') {
+                console.log('Found OFF header');
                 lineIndex = 1;
             }
             
             // Read vertex/face counts
+            console.log('Reading counts from line:', lineIndex, 'content:', lines[lineIndex]);
             const counts = lines[lineIndex].trim().split(/\s+/).map(n => parseInt(n));
             const numVertices = counts[0];
             const numFaces = counts[1];
+            console.log('numVertices:', numVertices, 'numFaces:', numFaces);
             lineIndex++;
             
             // Read vertices
             const vertices = [];
+            console.log('Reading', numVertices, 'vertices starting from line', lineIndex);
             for (let i = 0; i < numVertices; i++) {
-                const coords = lines[lineIndex + i].trim().split(/\s+/).map(n => parseFloat(n));
+                const line = lines[lineIndex + i];
+                const coords = line.trim().split(/\s+/).map(n => parseFloat(n));
                 vertices.push(coords[0], coords[1], coords[2]);
             }
             lineIndex += numVertices;
             
+            console.log('Read vertices:', vertices.length / 3);
+            
             // Read faces
             const triangles = [];
+            console.log('Reading', numFaces, 'faces starting from line', lineIndex);
             for (let i = 0; i < numFaces; i++) {
-                const face = lines[lineIndex + i].trim().split(/\s+/).map(n => parseInt(n));
+                const line = lines[lineIndex + i];
+                const face = line.trim().split(/\s+/).map(n => parseInt(n));
                 const numVerts = face[0];
                 if (numVerts === 3) {
                     triangles.push(face[1], face[2], face[3]);
@@ -472,6 +500,9 @@
                     triangles.push(face[1], face[3], face[4]);
                 }
             }
+            
+            console.log('Read triangles:', triangles.length / 3);
+            console.log('Final result - vertices array length:', vertices.length, 'triangles array length:', triangles.length);
             
             return { vertices, triangles };
         }
