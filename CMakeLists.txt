@@ -11,10 +11,10 @@ set(ENABLE_AVX2 True)
 #####################
 
 # Use CMake -DLGPL=ON if you opt for the LGPL license
-option(LGPL "LGPL" OFF)
+option(LGPL "LGPL" ON)
 
 # Use CMake -DEMSCRIPTEN=ON to build for Emscripten/WebAssembly
-option(EMSCRIPTEN "Build for Emscripten/WebAssembly" OFF)
+option(EMSCRIPTEN "Build for Emscripten/WebAssembly" ON)
 
 # set the project name
 project(cdt)
