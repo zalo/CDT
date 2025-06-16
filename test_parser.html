@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test OFF Parser</title>
+</head>
+<body>
+    <button onclick="testParser()">Test Parser</button>
+    <div id="result"></div>
+    
+    <script>
+        function parseOFF(content) {
+            console.log('parseOFF called with content length:', content.length);
+            console.log('First 100 chars:', content.substring(0, 100));
+            
+            const lines = content.trim().split('\n');
+            let lineIndex = 0;
+            
+            console.log('Total lines:', lines.length);
+            console.log('First 3 lines:', lines.slice(0, 3));
+            
+            // Skip header
+            if (lines[0].trim() === 'OFF') {
+                console.log('Found OFF header');
+                lineIndex = 1;
+            }
+            
+            // Read vertex/face counts
+            console.log('Reading counts from line:', lineIndex, 'content:', lines[lineIndex]);
+            const counts = lines[lineIndex].trim().split(/\s+/).map(n => parseInt(n));
+            console.log('Parsed counts:', counts);
+            const numVertices = counts[0];
+            const numFaces = counts[1];
+            console.log('numVertices:', numVertices, 'numFaces:', numFaces);
+            lineIndex++;
+            
+            // Read vertices
+            const vertices = [];
+            for (let i = 0; i < numVertices; i++) {
+                const line = lines[lineIndex + i];
+                if (!line) {
+                    console.error('Missing vertex line at index:', lineIndex + i);
+                    break;
+                }
+                const coords = line.trim().split(/\s+/).map(n => parseFloat(n));
+                if (coords.length < 3 || coords.some(isNaN)) {
+                    console.error('Invalid vertex coordinates at line:', lineIndex + i, 'coords:', coords);
+                    break;
+                }
+                vertices.push(coords[0], coords[1], coords[2]);
+            }
+            lineIndex += numVertices;
+            
+            console.log('Read vertices:', vertices.length / 3);
+            
+            // Read faces
+            const triangles = [];
+            for (let i = 0; i < numFaces; i++) {
+                const line = lines[lineIndex + i];
+                if (!line) {
+                    console.error('Missing face line at index:', lineIndex + i);
+                    break;
+                }
+                const face = line.trim().split(/\s+/).map(n => parseInt(n));
+                if (face.length < 4 || face.some(isNaN)) {
+                    console.error('Invalid face data at line:', lineIndex + i, 'face:', face);
+                    break;
+                }
+                const numVerts = face[0];
+                if (numVerts === 3) {
+                    triangles.push(face[1], face[2], face[3]);
+                } else if (numVerts === 4) {
+                    // Convert quad to two triangles
+                    triangles.push(face[1], face[2], face[3]);
+                    triangles.push(face[1], face[3], face[4]);
+                }
+            }
+            
+            console.log('Read triangles:', triangles.length / 3);
+            console.log('Returning vertices:', vertices.length, 'triangles:', triangles.length);
+            
+            return { vertices, triangles };
+        }
+        
+        function testParser() {
+            console.log('Testing parser...');
+            fetch('Input_file/bracket.off')
+                .then(response => {
+                    console.log('Fetch response status:', response.status, response.statusText);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.text();
+                })
+                .then(content => {
+                    console.log('Fetch content received, length:', content.length);
+                    const meshData = parseOFF(content);
+                    document.getElementById('result').innerHTML = `
+                        <h3>Parser Test Results:</h3>
+                        <p>Vertices: ${meshData.vertices.length / 3}</p>
+                        <p>Triangles: ${meshData.triangles.length / 3}</p>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    document.getElementById('result').innerHTML = `<p>Error: ${error.message}</p>`;
+                });
+        }
+    </script>
+</body>
+</html>
