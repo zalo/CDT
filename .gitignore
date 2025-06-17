@@ -7,3 +7,4 @@ dist/
 *.js.map
 test_bindings*
 node_modules/
+emsdk-cache/

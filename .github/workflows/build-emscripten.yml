@@ -236,6 +236,9 @@ jobs:
         cp dist/cdt.js demo-src/cdt.js
     - name: Run esbuild
       run: npm run build
+    - name: Clean up cache folders
+      run: |
+        rm -rf ./emsdk-cache
     - name: Setup Pages
       uses: actions/configure-pages@v4
     - name: Upload artifact
