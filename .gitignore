@@ -5,6 +5,8 @@ dist/
 *.o
 *.wasm
 *.js.map
+*.tet
+*.off.off
 test_bindings*
 node_modules/
 emsdk-cache/
