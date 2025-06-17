@@ -1,5 +1,6 @@
 import * as THREE from '../node_modules/three/build/three.module.js';
 import { GUI } from '../node_modules/three/examples/jsm/libs/lil-gui.module.min.js';
+import { OBJLoader } from '../node_modules/three/examples/jsm/loaders/OBJLoader.js';
 import World from './World.js';
 import CDTFactory from './cdt.js';
 
@@ -18,44 +19,119 @@ export default class Main {
     }
 
     async deferredConstructor() {
-        // Configure Settings
-        this.simulationParams = {
-        };
-        this.gui = new GUI();
-        //this.gui.add(this.simulationParams, 'numViews', 1, 10, 1).name('Number of Views')           .onChange((value) => { this.physicalCamera.numViews      = value; this.physicalCamera.setupCamera(); });
-        //this.gui.add(this.simulationParams, 'resolution', 256, 4096, 256).name('Resolution')        .onChange((value) => { this.physicalCamera.resolution    = value; this.physicalCamera.setupCamera(); });
-        //this.gui.add(this.simulationParams, 'aperture', 0.0, 0.1, 0.01).name('Aperture Size')       .onChange((value) => { this.physicalCamera.aperture      = value; this.physicalCamera.setupCamera(); });
-        //this.gui.add(this.simulationParams, 'focalDistance', 0.4, 5.0, 0.01).name('Focal Distance').onChange((value) => { this.physicalCamera.focalDistance = value; this.physicalCamera.setupCamera(); });
-
         // Initialize the CDT Runtime
         this.CDT = await CDTFactory();
+
+        // Initialize OBJ loader
+        this.objLoader = new OBJLoader();
 
         // Construct the render world
         this.world = new World(this);
 
-        let torusGeometry = new THREE.TorusKnotGeometry( ...Object.values( {
-				radius: 0.12,
-				tube: 0.04,
-				tubularSegments: 30,
-				radialSegments: 5,
-				p: 2,
-				q: 3,
-				thickness: 0.1
-			} ) );
-		let torusMaterial = new THREE.MeshPhysicalMaterial( {
-			transmission: 0.0, roughness: 1.0, metalness: 0.25, thickness: 0.5, side: THREE.DoubleSide
-		} );
-		let torus = new THREE.Mesh( torusGeometry, torusMaterial );
-		torus.position.set( 0, 0.25, 0 );
-		//this.world.scene.add( torus );
+        // Configure Settings
+        this.simulationParams = {
+            addBoundingBox: false,
+            verbose: false,
+            tetScale: 0.8,
+            wireframe: false
+        };
 
-        let triangles = torusGeometry.index.array;
-        let vertices  = torusGeometry.attributes.position.array;
-        let result = this.CDT.computeCDT(vertices, triangles);
-        console.log("CDT Result: ", result);
+        // Initialize with default torus knot geometry
+        this.currentGeometry = this.createTorusKnotGeometry();
+        this.currentMesh = null; // Will hold the current tetrahedra mesh
 
+        // Setup GUI
+        this.setupGUI();
+
+        // Compute and visualize initial tetrahedrization
+        this.computeAndVisualizeCDT();
+    }
+
+    createTorusKnotGeometry() {
+        return new THREE.TorusKnotGeometry( ...Object.values( {
+            radius: 0.12,
+            tube: 0.04,
+            tubularSegments: 30,
+            radialSegments: 5,
+            p: 2,
+            q: 3,
+            thickness: 0.1
+        } ) );
+    }
+
+    setupGUI() {
+        this.gui = new GUI();
+        
+        // CDT Parameters folder
+        const cdtFolder = this.gui.addFolder('CDT Parameters');
+        cdtFolder.add(this.simulationParams, 'addBoundingBox').name('Add Bounding Box').onChange(() => this.computeAndVisualizeCDT());
+        cdtFolder.add(this.simulationParams, 'verbose').name('Verbose Output').onChange(() => this.computeAndVisualizeCDT());
+        cdtFolder.add(this.simulationParams, 'tetScale', 0.1, 1.5, 0.1).name('Tetrahedra Scale').onChange(() => this.computeAndVisualizeCDT());
+        cdtFolder.add(this.simulationParams, 'wireframe').name('Wireframe Mode').onChange(() => this.computeAndVisualizeCDT());
+        cdtFolder.open();
+
+        // Mesh Controls folder
+        const meshFolder = this.gui.addFolder('Mesh Controls');
+        
+        // Add file upload button
+        const uploadButton = { uploadMesh: () => this.uploadMeshFile() };
+        meshFolder.add(uploadButton, 'uploadMesh').name('Upload Mesh File');
+        
+        // Add reset to default button
+        const resetButton = { resetToDefault: () => this.resetToDefaultGeometry() };
+        meshFolder.add(resetButton, 'resetToDefault').name('Reset to Torus Knot');
+        meshFolder.open();
+    }
+
+    computeAndVisualizeCDT() {
+        // Remove existing mesh if present
+        if (this.currentMesh) {
+            this.world.scene.remove(this.currentMesh);
+            this.currentMesh = null;
+        }
+
+        // Show processing message
+        console.log("Computing CDT...");
+
+        try {
+            // Extract vertices and triangles from current geometry
+            let triangles = this.currentGeometry.index.array;
+            let vertices = this.currentGeometry.attributes.position.array;
+            
+            // Compute CDT with current parameters
+            let result;
+            if (this.simulationParams.addBoundingBox || this.simulationParams.verbose) {
+                result = this.CDT.computeCDTWithOptions(
+                    vertices, 
+                    triangles, 
+                    this.simulationParams.addBoundingBox, 
+                    this.simulationParams.verbose
+                );
+            } else {
+                result = this.CDT.computeCDT(vertices, triangles);
+            }
+            
+            console.log("CDT Result: ", result);
+
+            if (!result.success) {
+                console.error("CDT computation failed");
+                this.display("CDT computation failed");
+                return;
+            }
+
+            // Create tetrahedra visualization
+            this.visualizeTetrahedra(result);
+            console.log(`Generated ${result.numTetrahedra} tetrahedra from ${result.numInputVertices} input vertices (${result.numSteinerVertices} Steiner points added)`);
+            
+        } catch (error) {
+            console.error("Error during CDT computation:", error);
+            this.display("Error during CDT computation: " + error.message);
+        }
+    }
+
+    visualizeTetrahedra(result) {
         let tetGeometry = new THREE.BufferGeometry();
-        let tetScale = 0.8;
+        let tetScale = this.simulationParams.tetScale;
 
         let vertexColors = [];
         let modifiedVertices = [];
@@ -103,15 +179,139 @@ export default class Main {
             modifiedVertices.push(v20, v21, v22, v30, v31, v32, v00, v01, v02);
             modifiedVertices.push(v30, v31, v32, v10, v11, v12, v00, v01, v02);
             modifiedVertices.push(v30, v31, v32, v20, v21, v22, v10, v11, v12);
-
         }
+        
         tetGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(modifiedVertices), 3));
         tetGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(vertexColors), 3));
-        let tetrahedraMesh = new THREE.Mesh(tetGeometry, new THREE.MeshPhysicalMaterial({ color: 0xffffff, wireframe: false, side: THREE.DoubleSide, vertexColors: true }));
+        
+        let material = new THREE.MeshPhysicalMaterial({ 
+            color: 0xffffff, 
+            wireframe: this.simulationParams.wireframe, 
+            side: THREE.DoubleSide, 
+            vertexColors: true 
+        });
+        
+        this.currentMesh = new THREE.Mesh(tetGeometry, material);
         tetGeometry.computeVertexNormals();
+        this.currentMesh.position.set(0, 0.3, 0);
+        this.world.scene.add(this.currentMesh);
+    }
 
-        tetrahedraMesh.position.set(0, 0.3, 0);
-        this.world.scene.add(tetrahedraMesh);
+    uploadMeshFile() {
+        // Create file input element
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.obj,.ply,.stl';
+        input.style.display = 'none';
+        
+        input.onchange = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                this.loadMeshFromFile(file);
+            }
+        };
+        
+        document.body.appendChild(input);
+        input.click();
+        document.body.removeChild(input);
+    }
+
+    loadMeshFromFile(file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const content = event.target.result;
+            const geometry = this.parseMeshFile(file.name, content);
+            if (geometry) {
+                this.currentGeometry = geometry;
+                this.computeAndVisualizeCDT();
+            } else {
+                alert('Failed to parse mesh file. Supported formats: OBJ');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    parseMeshFile(filename, content) {
+        const extension = filename.toLowerCase().split('.').pop();
+        
+        switch (extension) {
+            case 'obj':
+                return this.parseOBJWithLoader(content);
+            default:
+                console.error('Unsupported file format:', extension);
+                return null;
+        }
+    }
+
+    parseOBJWithLoader(content) {
+        try {
+            // Use three.js OBJLoader to parse the content
+            const group = this.objLoader.parse(content);
+            
+            // Extract the first mesh from the group
+            let mesh = null;
+            group.traverse((child) => {
+                if (child instanceof THREE.Mesh && !mesh) {
+                    mesh = child;
+                }
+            });
+            
+            if (!mesh || !mesh.geometry) {
+                console.error('No valid mesh found in OBJ file');
+                return null;
+            }
+            
+            // Get the geometry from the mesh
+            let geometry = mesh.geometry;
+            
+            // If the geometry doesn't have indices, we need to create them
+            if (!geometry.index) {
+                const positions = geometry.attributes.position.array;
+                const vertices = [];
+                const indices = [];
+                const vertexMap = new Map();
+                
+                // Create unique vertices and indices by comparing vertex positions
+                for (let i = 0; i < positions.length; i += 3) {
+                    const x = positions[i];
+                    const y = positions[i + 1];
+                    const z = positions[i + 2];
+                    const key = `${x.toFixed(6)},${y.toFixed(6)},${z.toFixed(6)}`;
+                    
+                    let vertexIndex = vertexMap.get(key);
+                    if (vertexIndex === undefined) {
+                        vertexIndex = vertices.length / 3;
+                        vertices.push(x, y, z);
+                        vertexMap.set(key, vertexIndex);
+                    }
+                    indices.push(vertexIndex);
+                }
+                
+                // Create new indexed geometry
+                const indexedGeometry = new THREE.BufferGeometry();
+                indexedGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+                indexedGeometry.setIndex(indices);
+                indexedGeometry.computeVertexNormals();
+                
+                return indexedGeometry;
+            }
+            
+            // Ensure normals are computed
+            if (!geometry.attributes.normal) {
+                geometry.computeVertexNormals();
+            }
+            
+            return geometry;
+            
+        } catch (error) {
+            console.error('Error parsing OBJ file:', error);
+            return null;
+        }
+    }
+
+    resetToDefaultGeometry() {
+        this.currentGeometry = this.createTorusKnotGeometry();
+        this.computeAndVisualizeCDT();
     }
 
     /** Update the simulation */
