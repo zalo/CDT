@@ -1329,12 +1329,12 @@ size_t PLCx::markInnerTets() {
     // Crea relazione VF
     //   per ogni faccia f aggiungi f alla VF di tutti i suoi bounding e internal vertices
     // Per ogni triangolo in delmesh, cerca la(le) faccia comune f in VF(v1), VF(v2) e VF(v3)
-    //   se c'è più di una faccia comune marca immediatamente il triangolo e passa oltre
+    //   se c'ï¿½ piï¿½ di una faccia comune marca immediatamente il triangolo e passa oltre
     //   altrimenti
     // scopri se il triangolo sta dentro o fuori dalla faccia comune f (orient2d?)
-    //   1) se f è convessa
-    //   2) se v1 è interno a f (o v2, o v3)
-    //   3) se il baricentro del triangolo è interno a uno dei triangoli di f e al triangolo stesso (check per possibile errore numerico)
+    //   1) se f ï¿½ convessa
+    //   2) se v1 ï¿½ interno a f (o v2, o v3)
+    //   3) se il baricentro del triangolo ï¿½ interno a uno dei triangoli di f e al triangolo stesso (check per possibile errore numerico)
     // Se la faccia comune esiste e il triangolo ci sta dentro allora marcala, altrimenti no
 
 
@@ -1522,9 +1522,16 @@ bool PLCx::recoverFaceHSi(std::vector<uint64_t>& i_tets, const PLCface& f, bool&
         delmesh.mark_tetrahedra.resize(last);
 
         t = meshCavity(top_faces, top_vertices, bottom_faces);
-        assert(t == UINT64_MAX);
-        t = meshCavity(bottom_faces, bottom_vertices, top_faces);
-        assert(t == UINT64_MAX);
+        if (t != UINT64_MAX) {
+            // meshCavity failed for top cavity - mark as failed and use gift-wrap fallback
+            cavity_ok = false;
+        } else {
+            t = meshCavity(bottom_faces, bottom_vertices, top_faces);
+            if (t != UINT64_MAX) {
+                // meshCavity failed for bottom cavity - mark as failed and use gift-wrap fallback
+                cavity_ok = false;
+            }
+        }
     }
 
     if (!toremove.empty()) {
