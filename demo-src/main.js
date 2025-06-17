@@ -1,5 +1,6 @@
 import * as THREE from '../node_modules/three/build/three.module.js';
 import { GUI } from '../node_modules/three/examples/jsm/libs/lil-gui.module.min.js';
+import { OBJLoader } from '../node_modules/three/examples/jsm/loaders/OBJLoader.js';
 import World from './World.js';
 import CDTFactory from './cdt.js';
 
@@ -20,6 +21,9 @@ export default class Main {
     async deferredConstructor() {
         // Initialize the CDT Runtime
         this.CDT = await CDTFactory();
+
+        // Initialize OBJ loader
+        this.objLoader = new OBJLoader();
 
         // Construct the render world
         this.world = new World(this);
@@ -124,8 +128,6 @@ export default class Main {
             this.display("Error during CDT computation: " + error.message);
         }
     }
-
-    visualizeTetrahedra(result) {
 
     visualizeTetrahedra(result) {
         let tetGeometry = new THREE.BufferGeometry();
@@ -234,59 +236,82 @@ export default class Main {
         
         switch (extension) {
             case 'obj':
-                return this.parseOBJ(content);
+                return this.parseOBJWithLoader(content);
             default:
                 console.error('Unsupported file format:', extension);
                 return null;
         }
     }
 
-    parseOBJ(content) {
-        const vertices = [];
-        const faces = [];
-        const lines = content.split('\n');
-        
-        for (let line of lines) {
-            line = line.trim();
-            if (line.startsWith('v ')) {
-                const coords = line.split(/\s+/).slice(1).map(parseFloat);
-                if (coords.length >= 3) {
-                    vertices.push(coords[0], coords[1], coords[2]);
+    parseOBJWithLoader(content) {
+        try {
+            // Use three.js OBJLoader to parse the content
+            const group = this.objLoader.parse(content);
+            
+            // Extract the first mesh from the group
+            let mesh = null;
+            group.traverse((child) => {
+                if (child instanceof THREE.Mesh && !mesh) {
+                    mesh = child;
                 }
-            } else if (line.startsWith('f ')) {
-                const indices = line.split(/\s+/).slice(1);
-                if (indices.length >= 3) {
-                    // Handle faces with 3 or more vertices (triangulate quads)
-                    const face = indices.map(index => {
-                        // Handle format "v/vt/vn" or "v//vn" or just "v"
-                        return parseInt(index.split('/')[0]) - 1; // OBJ indices are 1-based
-                    });
-                    
-                    // Triangulate face if it has more than 3 vertices
-                    for (let i = 1; i < face.length - 1; i++) {
-                        faces.push(face[0], face[i], face[i + 1]);
-                    }
-                }
+            });
+            
+            if (!mesh || !mesh.geometry) {
+                console.error('No valid mesh found in OBJ file');
+                return null;
             }
-        }
-        
-        if (vertices.length === 0 || faces.length === 0) {
-            console.error('No valid vertices or faces found in OBJ file');
+            
+            // Get the geometry from the mesh
+            let geometry = mesh.geometry;
+            
+            // If the geometry doesn't have indices, we need to create them
+            if (!geometry.index) {
+                const positions = geometry.attributes.position.array;
+                const vertices = [];
+                const indices = [];
+                const vertexMap = new Map();
+                
+                // Create unique vertices and indices by comparing vertex positions
+                for (let i = 0; i < positions.length; i += 3) {
+                    const x = positions[i];
+                    const y = positions[i + 1];
+                    const z = positions[i + 2];
+                    const key = `${x.toFixed(6)},${y.toFixed(6)},${z.toFixed(6)}`;
+                    
+                    let vertexIndex = vertexMap.get(key);
+                    if (vertexIndex === undefined) {
+                        vertexIndex = vertices.length / 3;
+                        vertices.push(x, y, z);
+                        vertexMap.set(key, vertexIndex);
+                    }
+                    indices.push(vertexIndex);
+                }
+                
+                // Create new indexed geometry
+                const indexedGeometry = new THREE.BufferGeometry();
+                indexedGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+                indexedGeometry.setIndex(indices);
+                indexedGeometry.computeVertexNormals();
+                
+                return indexedGeometry;
+            }
+            
+            // Ensure normals are computed
+            if (!geometry.attributes.normal) {
+                geometry.computeVertexNormals();
+            }
+            
+            return geometry;
+            
+        } catch (error) {
+            console.error('Error parsing OBJ file:', error);
             return null;
         }
-        
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
-        geometry.setIndex(faces);
-        geometry.computeVertexNormals();
-        
-        return geometry;
     }
 
     resetToDefaultGeometry() {
         this.currentGeometry = this.createTorusKnotGeometry();
         this.computeAndVisualizeCDT();
-    }
     }
 
     /** Update the simulation */
